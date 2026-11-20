@@ -22,15 +22,13 @@ def benchmark_rows(data, seconds)
   if prefill && prompt && cached && cached <= prompt
     computed = prompt - cached
     prefill_row = if computed > 0
-      format('Prefill: %.1f tok/s · %.1f ms', computed / prefill, prefill * 1000)
+      format('Prefill: %.1f tok/s', computed / prefill)
     else
       'Prefill: prompt fully cached'
     end
-  elsif prefill
-    prefill_row = format('Prefill: %.1f ms · rate unavailable', prefill * 1000)
   end
   [
-    format('Benchmark: %.1f tok/s overall · %.2f s · %d tokens', tokens / seconds, seconds, tokens),
+    format('Benchmark: %.1f tok/s overall · %.2f s', tokens / seconds, seconds),
     prefill_row,
     ttft ? format('Time to first token: %.1f ms', ttft * 1000) : 'Time to first token: unavailable'
   ]
@@ -41,13 +39,15 @@ end
 if __FILE__ == $PROGRAM_NAME
 begin
   destination = ARGV.fetch(0)
+  token_limit = Integer(ARGV.fetch(1, '64'))
+  raise 'Output tokens must be between 1 and 4096' unless (1..4096).cover?(token_limit)
   uri = URI('http://127.0.0.1:8080/v1/chat/completions')
   http = Net::HTTP.new(uri.host, uri.port, nil)
   http.open_timeout = 5
   http.read_timeout = 90
   request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
   request.body = JSON.generate(
-    model: 'local-model', stream: false, max_tokens: 64, temperature: 0,
+    model: 'local-model', stream: false, max_tokens: token_limit, temperature: 0,
     messages: [{role: 'user', content: 'Explain how a rainbow forms. Write a detailed paragraph.'}]
   )
   started = Process.clock_gettime(Process::CLOCK_MONOTONIC)

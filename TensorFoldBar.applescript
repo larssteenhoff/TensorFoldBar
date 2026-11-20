@@ -20,7 +20,10 @@ property benchmarkTask : missing value
 property benchmarkItem : missing value
 property benchmarkResult : missing value
 property benchmarkPath : ""
-property benchmarkButtonTitle : "Run benchmark (64 tokens)"
+property benchmarkButtonTitle : "Run benchmark"
+property benchmarkTokens : 64
+property tokenSizeItem : missing value
+property tokenSizeOptions : {}
 property prefillResult : missing value
 property ttftResult : missing value
 
@@ -38,7 +41,18 @@ on run
  set pauseItem to my addItem(menu, "Pause", "togglePause:")
  set stopItem to my addItem(menu, "Stop and release RAM", "stopServer:")
  menu's addItem:(current application's NSMenuItem's separatorItem())
- set benchmarkItem to my addItem(menu, "Run benchmark (64 tokens)", "runBenchmark:")
+ set savedTokenCount to (current application's NSUserDefaults's standardUserDefaults())'s integerForKey:"benchmarkTokens"
+ if (savedTokenCount as integer) is in {32, 64, 128, 256, 512, 1024, 2048, 4096} then set benchmarkTokens to savedTokenCount as integer
+ set tokenSizeItem to my addItem(menu, "Output tokens: " & benchmarkTokens, "statusInfo:")
+ set tokenMenu to (current application's NSMenu's alloc())'s initWithTitle:"Output tokens"
+ set tokenSizeOptions to {}
+ repeat with tokenCount in {32, 64, 128, 256, 512, 1024, 2048, 4096}
+  set optionItem to my addItem(tokenMenu, tokenCount as text, "setBenchmarkTokens:")
+  optionItem's setTag:(tokenCount as integer)
+  set end of tokenSizeOptions to optionItem
+ end repeat
+ tokenSizeItem's setSubmenu:tokenMenu
+ set benchmarkItem to my addItem(menu, "Run benchmark", "runBenchmark:")
  set benchmarkResult to my addItem(menu, "Benchmark: not run yet", "statusInfo:")
  benchmarkResult's setHidden:true
  set prefillResult to my addItem(menu, "Prefill: unavailable", "statusInfo:")
@@ -135,7 +149,7 @@ on refresh:sender
      benchmarkResult's setHidden:false
      prefillResult's setHidden:false
      ttftResult's setHidden:false
-     set benchmarkButtonTitle to "Run benchmark (64 tokens)"
+     set benchmarkButtonTitle to "Run benchmark"
     else
      set benchmarkButtonTitle to "Benchmark failed — retry"
     end if
@@ -192,6 +206,16 @@ on refresh:sender
  stopItem's setEnabled:(worker is not missing value)
  updateItem's setEnabled:(worker is missing value)
  benchmarkItem's setEnabled:(phase is "Running" and not paused and benchmarkTask is missing value)
+ tokenSizeItem's setTitle:("Output tokens: " & benchmarkTokens)
+ tokenSizeItem's setEnabled:(benchmarkTask is missing value)
+ repeat with optionItem in tokenSizeOptions
+  if (optionItem's tag() as integer) is benchmarkTokens then
+   optionItem's setState:1
+  else
+   optionItem's setState:0
+  end if
+  optionItem's setEnabled:(benchmarkTask is missing value)
+ end repeat
  if benchmarkTask is not missing value then
   benchmarkItem's setTitle:"Benchmark running…"
  else
@@ -212,12 +236,12 @@ end statusInfo:
 on runBenchmark:sender
  if phase is not "Running" or paused or benchmarkTask is not missing value then return
  my hideBenchmarkResults()
- set benchmarkButtonTitle to "Run benchmark (64 tokens)"
+ set benchmarkButtonTitle to "Run benchmark"
  set resourceDir to ((current application's NSBundle's mainBundle())'s resourcePath()) as text
  try
   set benchmarkTask to current application's NSTask's new()
   benchmarkTask's setLaunchPath:"/usr/bin/ruby"
-  benchmarkTask's setArguments:{resourceDir & "/benchmark.rb", benchmarkPath}
+  benchmarkTask's setArguments:{resourceDir & "/benchmark.rb", benchmarkPath, benchmarkTokens as text}
   benchmarkTask's setStandardOutput:logHandle
   benchmarkTask's setStandardError:logHandle
   benchmarkTask's |launch|()
@@ -233,7 +257,7 @@ on cancelBenchmark()
   if (benchmarkTask's isRunning()) as boolean then benchmarkTask's terminate()
   set benchmarkTask to missing value
   my hideBenchmarkResults()
-  set benchmarkButtonTitle to "Run benchmark (64 tokens)"
+  set benchmarkButtonTitle to "Run benchmark"
  end if
 end cancelBenchmark
 
@@ -242,6 +266,14 @@ on hideBenchmarkResults()
  if prefillResult is not missing value then prefillResult's setHidden:true
  if ttftResult is not missing value then ttftResult's setHidden:true
 end hideBenchmarkResults
+
+on setBenchmarkTokens:sender
+ if benchmarkTask is not missing value then return
+ set benchmarkTokens to sender's tag() as integer
+ (current application's NSUserDefaults's standardUserDefaults())'s setInteger:benchmarkTokens forKey:"benchmarkTokens"
+ my hideBenchmarkResults()
+ my refresh:(missing value)
+end setBenchmarkTokens:
 
 on availableRAM()
  try
