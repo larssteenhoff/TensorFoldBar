@@ -25,7 +25,7 @@ on run
  set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
  set menu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
  set statusLine to my addItem(menu, "TensorFold — Stopped", "statusInfo:")
- my addItem(menu, "Model: Qwen3.5 2B · 4-bit", "")
+ my addItem(menu, "Model: Qwen3.5 2B · 4-bit", "statusInfo:")
  menu's addItem:(current application's NSMenuItem's separatorItem())
  set startItem to my addItem(menu, "Start TensorFold", "startServer:")
  set pauseItem to my addItem(menu, "Pause", "togglePause:")
