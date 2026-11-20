@@ -20,6 +20,7 @@ property benchmarkTask : missing value
 property benchmarkItem : missing value
 property benchmarkResult : missing value
 property benchmarkPath : ""
+property benchmarkButtonTitle : "Run benchmark (64 tokens)"
 
 on run
  set logPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar.log"
@@ -37,6 +38,7 @@ on run
  menu's addItem:(current application's NSMenuItem's separatorItem())
  set benchmarkItem to my addItem(menu, "Run benchmark (64 tokens)", "runBenchmark:")
  set benchmarkResult to my addItem(menu, "Benchmark: not run yet", "statusInfo:")
+ benchmarkResult's setHidden:true
  set benchmarkPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar-benchmark.txt"
  menu's addItem:(current application's NSMenuItem's separatorItem())
  my addItem(menu, "Copy API URL", "copyURL:")
@@ -119,9 +121,16 @@ on refresh:sender
   if not ((benchmarkTask's isRunning()) as boolean) then
    if ((benchmarkTask's terminationStatus()) as integer) is 0 then
     set resultText to current application's NSString's stringWithContentsOfFile:benchmarkPath encoding:(current application's NSUTF8StringEncoding) |error|:(missing value)
-    if resultText is not missing value then benchmarkResult's setTitle:(resultText as text)
+    if resultText is not missing value then
+     benchmarkResult's setTitle:(resultText as text)
+     benchmarkResult's setHidden:false
+     set benchmarkButtonTitle to "Run benchmark (64 tokens)"
+    else
+     set benchmarkButtonTitle to "Benchmark failed — retry"
+    end if
    else
-    benchmarkResult's setTitle:"Benchmark failed — see log"
+    benchmarkResult's setHidden:true
+    set benchmarkButtonTitle to "Benchmark failed — retry"
    end if
    set benchmarkTask to missing value
   end if
@@ -175,7 +184,7 @@ on refresh:sender
  if benchmarkTask is not missing value then
   benchmarkItem's setTitle:"Benchmark running…"
  else
-  benchmarkItem's setTitle:"Run benchmark (64 tokens)"
+  benchmarkItem's setTitle:benchmarkButtonTitle
  end if
  if benchmarkTask is not missing value then pauseItem's setEnabled:false
  if paused then
@@ -191,6 +200,8 @@ end statusInfo:
 
 on runBenchmark:sender
  if phase is not "Running" or paused or benchmarkTask is not missing value then return
+ benchmarkResult's setHidden:true
+ set benchmarkButtonTitle to "Run benchmark (64 tokens)"
  set resourceDir to ((current application's NSBundle's mainBundle())'s resourcePath()) as text
  try
   set benchmarkTask to current application's NSTask's new()
@@ -199,10 +210,9 @@ on runBenchmark:sender
   benchmarkTask's setStandardOutput:logHandle
   benchmarkTask's setStandardError:logHandle
   benchmarkTask's |launch|()
-  benchmarkResult's setTitle:"Benchmark: running…"
  on error
   set benchmarkTask to missing value
-  benchmarkResult's setTitle:"Benchmark could not start — see log"
+  set benchmarkButtonTitle to "Benchmark failed — retry"
  end try
  my refresh:(missing value)
 end runBenchmark:
@@ -211,7 +221,8 @@ on cancelBenchmark()
  if benchmarkTask is not missing value then
   if (benchmarkTask's isRunning()) as boolean then benchmarkTask's terminate()
   set benchmarkTask to missing value
-  benchmarkResult's setTitle:"Benchmark: cancelled"
+  benchmarkResult's setHidden:true
+  set benchmarkButtonTitle to "Run benchmark (64 tokens)"
  end if
 end cancelBenchmark
 
