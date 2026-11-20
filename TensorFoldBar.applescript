@@ -35,7 +35,7 @@ on run
  set pauseItem to my addItem(menu, "Pause", "togglePause:")
  set stopItem to my addItem(menu, "Stop and release RAM", "stopServer:")
  menu's addItem:(current application's NSMenuItem's separatorItem())
- set benchmarkItem to my addItem(menu, "Run quick benchmark (64 tokens)", "runBenchmark:")
+ set benchmarkItem to my addItem(menu, "Run benchmark (64 tokens)", "runBenchmark:")
  set benchmarkResult to my addItem(menu, "Benchmark: not run yet", "statusInfo:")
  set benchmarkPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar-benchmark.txt"
  menu's addItem:(current application's NSMenuItem's separatorItem())
@@ -172,6 +172,11 @@ on refresh:sender
  stopItem's setEnabled:(worker is not missing value)
  updateItem's setEnabled:(worker is missing value)
  benchmarkItem's setEnabled:(phase is "Running" and not paused and benchmarkTask is missing value)
+ if benchmarkTask is not missing value then
+  benchmarkItem's setTitle:"Benchmark running…"
+ else
+  benchmarkItem's setTitle:"Run benchmark (64 tokens)"
+ end if
  if benchmarkTask is not missing value then pauseItem's setEnabled:false
  if paused then
   pauseItem's setTitle:"Resume"
@@ -194,7 +199,7 @@ on runBenchmark:sender
   benchmarkTask's setStandardOutput:logHandle
   benchmarkTask's setStandardError:logHandle
   benchmarkTask's |launch|()
-  benchmarkResult's setTitle:"Benchmark: measuring…"
+  benchmarkResult's setTitle:"Benchmark: running…"
  on error
   set benchmarkTask to missing value
   benchmarkResult's setTitle:"Benchmark could not start — see log"

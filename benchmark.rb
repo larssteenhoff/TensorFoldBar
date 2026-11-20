@@ -27,6 +27,6 @@ begin
   File.rename(destination + '.tmp', destination)
   puts "#{summary} (end-to-end; prompt time included)"
 rescue StandardError => e
-  warn "Quick benchmark failed: #{e.message}"
+  warn "Benchmark failed: #{e.message}"
   exit 1
 end
