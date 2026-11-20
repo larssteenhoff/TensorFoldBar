@@ -2,8 +2,43 @@
 require 'net/http'
 require 'json'
 
+def positive_number(value, allow_zero: false)
+  n = Float(value)
+  n if n.finite? && (allow_zero ? n >= 0 : n > 0)
+rescue ArgumentError, TypeError
+  nil
+end
+
+def benchmark_rows(data, seconds)
+  usage = data.fetch('usage')
+  tokens = Integer(usage.fetch('completion_tokens'))
+  raise 'Server returned no output tokens' unless tokens > 0 && seconds > 0
+  runtime = data['tensorfold'] || {}
+  prefill = positive_number(runtime['prefill_seconds'])
+  ttft = positive_number(runtime['time_to_first_token'], allow_zero: true)
+  prompt = positive_number(usage['prompt_tokens'], allow_zero: true)
+  cached = positive_number((usage['prompt_tokens_details'] || {})['cached_tokens'], allow_zero: true)
+  prefill_row = 'Prefill: unavailable'
+  if prefill && prompt && cached && cached <= prompt
+    computed = prompt - cached
+    prefill_row = if computed > 0
+      format('Prefill: %.1f tok/s · %.1f ms', computed / prefill, prefill * 1000)
+    else
+      'Prefill: prompt fully cached'
+    end
+  elsif prefill
+    prefill_row = format('Prefill: %.1f ms · rate unavailable', prefill * 1000)
+  end
+  [
+    format('Benchmark: %.1f tok/s overall · %.2f s · %d tokens', tokens / seconds, seconds, tokens),
+    prefill_row,
+    ttft ? format('Time to first token: %.1f ms', ttft * 1000) : 'Time to first token: unavailable'
+  ]
+end
+
 # A single local request; includes prompt processing and generation time.
 # No results or machine information are uploaded.
+if __FILE__ == $PROGRAM_NAME
 begin
   destination = ARGV.fetch(0)
   uri = URI('http://127.0.0.1:8080/v1/chat/completions')
@@ -20,13 +55,12 @@ begin
   seconds = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
   raise "HTTP #{response.code}: #{response.body[0, 600]}" unless response.is_a?(Net::HTTPSuccess)
   data = JSON.parse(response.body)
-  tokens = Integer(data.fetch('usage').fetch('completion_tokens'))
-  raise 'Server returned no output tokens' unless tokens > 0 && seconds > 0
-  summary = format('Benchmark: %.1f tok/s · %.2f s · %d tokens', tokens / seconds, seconds, tokens)
+  summary = benchmark_rows(data, seconds).join("\n")
   File.write(destination + '.tmp', summary)
   File.rename(destination + '.tmp', destination)
   puts "#{summary} (end-to-end; prompt time included)"
 rescue StandardError => e
   warn "Benchmark failed: #{e.message}"
   exit 1
+end
 end
