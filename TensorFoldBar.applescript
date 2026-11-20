@@ -24,7 +24,7 @@ on run
  logHandle's seekToEndOfFile()
  set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
  set menu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
- set statusLine to my addItem(menu, "TensorFold — Stopped", "")
+ set statusLine to my addItem(menu, "TensorFold — Stopped", "statusInfo:")
  my addItem(menu, "Model: Qwen3.5 2B · 4-bit", "")
  menu's addItem:(current application's NSMenuItem's separatorItem())
  set startItem to my addItem(menu, "Start TensorFold", "startServer:")
@@ -139,7 +139,14 @@ on refresh:sender
  if worker is not missing value then set marker to "●"
  if paused then set marker to "Ⅱ"
  (statusItem's button())'s setTitle:("TF " & marker & " · " & ramText & " GB available")
- statusLine's setTitle:("TensorFold — " & labelText)
+ set dotColor to current application's NSColor's secondaryLabelColor()
+ if phase is "Running" then set dotColor to current application's NSColor's systemGreenColor()
+ if paused then set dotColor to current application's NSColor's systemOrangeColor()
+ if phase is "Updating" or phase is "Downloading/checking model" then set dotColor to current application's NSColor's systemOrangeColor()
+ set statusTitle to (current application's NSMutableAttributedString's alloc())'s initWithString:("● TensorFold — " & labelText)
+ statusTitle's addAttribute:(current application's NSForegroundColorAttributeName) value:(current application's NSColor's labelColor()) range:{location:0, |length|:(statusTitle's |length|())}
+ statusTitle's addAttribute:(current application's NSForegroundColorAttributeName) value:dotColor range:{location:0, |length|:1}
+ statusLine's setAttributedTitle:statusTitle
  startItem's setEnabled:(worker is missing value)
  pauseItem's setEnabled:(phase is "Running")
  stopItem's setEnabled:(worker is not missing value)
@@ -150,6 +157,10 @@ on refresh:sender
   pauseItem's setTitle:"Pause"
  end if
 end refresh:
+
+on statusInfo:sender
+ -- Informational row stays enabled so macOS does not dim its status color.
+end statusInfo:
 
 on availableRAM()
  try

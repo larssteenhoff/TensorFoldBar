@@ -2,6 +2,8 @@
 
 A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFold) on Apple Silicon.
 
+![TensorFold Bar menu with server controls and available RAM](screenshot.png)
+
 ## Controls
 
 - Start: download/check the pinned Qwen3.5-2B MLX 4-bit model, then launch its local server.
