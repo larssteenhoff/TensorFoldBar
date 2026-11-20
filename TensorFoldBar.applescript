@@ -1,0 +1,213 @@
+use AppleScript version "2.7"
+use framework "Cocoa"
+use scripting additions
+
+property parent : class "NSObject"
+property statusItem : missing value
+property statusLine : missing value
+property startItem : missing value
+property pauseItem : missing value
+property stopItem : missing value
+property updateItem : missing value
+property pollTimer : missing value
+property worker : missing value
+property logHandle : missing value
+property phase : "Stopped"
+property paused : false
+property modelID : "mlx-community/Qwen3.5-2B-MLX-4bit"
+property logPath : ""
+
+on run
+ set logPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar.log"
+ (current application's NSFileManager's defaultManager())'s createFileAtPath:logPath |contents|:(missing value) |attributes|:(missing value)
+ set logHandle to current application's NSFileHandle's fileHandleForWritingAtPath:logPath
+ logHandle's seekToEndOfFile()
+ set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
+ set menu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
+ set statusLine to my addItem(menu, "TensorFold — Stopped", "")
+ my addItem(menu, "Model: Qwen3.5 2B · 4-bit", "")
+ menu's addItem:(current application's NSMenuItem's separatorItem())
+ set startItem to my addItem(menu, "Start TensorFold", "startServer:")
+ set pauseItem to my addItem(menu, "Pause", "togglePause:")
+ set stopItem to my addItem(menu, "Stop and release RAM", "stopServer:")
+ menu's addItem:(current application's NSMenuItem's separatorItem())
+ my addItem(menu, "Copy API URL", "copyURL:")
+ my addItem(menu, "Show log…", "showLog:")
+ set updateItem to my addItem(menu, "Update TensorFold to latest…", "updateEngine:")
+ menu's addItem:(current application's NSMenuItem's separatorItem())
+ my addItem(menu, "Quit TensorFold Bar", "quitApp:")
+ statusItem's setMenu:menu
+ set pollTimer to current application's NSTimer's scheduledTimerWithTimeInterval:3 target:me selector:"refresh:" userInfo:(missing value) repeats:true
+ my refresh:(missing value)
+end run
+
+on addItem(theMenu, theTitle, theAction)
+ set menuEntry to (current application's NSMenuItem's alloc())'s initWithTitle:theTitle action:theAction keyEquivalent:""
+ if theAction is not "" then menuEntry's setTarget:me
+ theMenu's addItem:menuEntry
+ return menuEntry
+end addItem
+
+on binaryPath()
+ return (((current application's NSBundle's mainBundle())'s resourcePath()) as text) & "/runtime/bin/tensorfold-native"
+end binaryPath
+
+on launchWorker(args)
+ set worker to (current application's NSTask's alloc())'s init()
+ worker's setLaunchPath:(my binaryPath())
+ worker's setArguments:args
+ worker's setStandardOutput:logHandle
+ worker's setStandardError:logHandle
+ worker's |launch|()
+end launchWorker
+
+on startServer:sender
+ if worker is not missing value then return
+ try
+  set phase to "Downloading/checking model"
+  my launchWorker({"pull", modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"})
+ on error err
+  set worker to missing value
+  set phase to "Could not start — see log"
+  set alertBox to current application's NSAlert's new()
+  alertBox's setMessageText:"TensorFold could not start"
+  alertBox's setInformativeText:err
+  alertBox's runModal()
+ end try
+ my refresh:(missing value)
+end startServer:
+
+on togglePause:sender
+ if worker is missing value then return
+ if phase is not "Running" then return
+ if paused then
+  if (worker's resume()) as boolean then set paused to false
+ else
+  if (worker's suspend()) as boolean then set paused to true
+ end if
+ my refresh:(missing value)
+end togglePause:
+
+on stopServer:sender
+ if worker is not missing value then
+  if paused then worker's resume()
+  if (worker's isRunning()) as boolean then
+   worker's terminate()
+   set paused to false
+   set phase to "Stopping"
+   my refresh:(missing value)
+   return
+  end if
+ end if
+ set worker to missing value
+ set paused to false
+ set phase to "Stopped"
+ my refresh:(missing value)
+end stopServer:
+
+on refresh:sender
+ if worker is not missing value then
+  if not ((worker's isRunning()) as boolean) then
+   set resultCode to (worker's terminationStatus()) as integer
+   set worker to missing value
+   if phase is "Downloading/checking model" and resultCode is 0 then
+    try
+     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "8192", "--no-thinking", "--no-update-check"})
+     set phase to "Running"
+    on error
+     set worker to missing value
+     set phase to "Start failed — see log"
+    end try
+   else if phase is "Updating" then
+    if resultCode is 0 then
+     set phase to "Updated — ready to start"
+    else
+     set phase to "Update failed — see log"
+    end if
+   else if phase is "Stopping" then
+    set phase to "Stopped"
+   else
+    set phase to "Exited (" & resultCode & ") — see log"
+   end if
+   set paused to false
+  end if
+ end if
+ set labelText to phase
+ if paused then set labelText to "Paused"
+ set ramText to my availableRAM()
+ set marker to "○"
+ if worker is not missing value then set marker to "●"
+ if paused then set marker to "Ⅱ"
+ (statusItem's button())'s setTitle:("TF " & marker & " · " & ramText & " GB available")
+ statusLine's setTitle:("TensorFold — " & labelText)
+ startItem's setEnabled:(worker is missing value)
+ pauseItem's setEnabled:(phase is "Running")
+ stopItem's setEnabled:(worker is not missing value)
+ updateItem's setEnabled:(worker is missing value)
+ if paused then
+  pauseItem's setTitle:"Resume"
+ else
+  pauseItem's setTitle:"Pause"
+ end if
+end refresh:
+
+on availableRAM()
+ try
+  -- Free + inactive + speculative pages: reclaimable memory estimate.
+  set memoryTask to current application's NSTask's new()
+  set pipeOut to current application's NSPipe's pipe()
+  memoryTask's setLaunchPath:"/bin/sh"
+  memoryTask's setArguments:{"-c", "/usr/bin/vm_stat | /usr/bin/awk 'NR==1 { for(i=1;i<=NF;i++) if($i==\"of\") p=$(i+1) } /^Pages free:|^Pages inactive:|^Pages speculative:/ { gsub(/[^0-9]/,\"\",$NF); n+=$NF } END { printf \"%.1f\", n*p/1073741824 }'"}
+  memoryTask's setStandardOutput:pipeOut
+  memoryTask's |launch|()
+  set outputData to (pipeOut's fileHandleForReading())'s readDataToEndOfFile()
+  return ((current application's NSString's alloc())'s initWithData:outputData encoding:(current application's NSUTF8StringEncoding)) as text
+ on error
+  return "?"
+ end try
+end availableRAM
+
+on copyURL:sender
+ set pb to current application's NSPasteboard's generalPasteboard()
+ pb's clearContents()
+ pb's setString:"http://127.0.0.1:8080/v1" forType:(current application's NSPasteboardTypeString)
+end copyURL:
+
+on showLog:sender
+ (current application's NSWorkspace's sharedWorkspace())'s openFile:logPath
+end showLog:
+
+on updateEngine:sender
+ if worker is not missing value then return
+ set resourceDir to (current application's NSBundle's mainBundle()'s resourcePath()) as text
+ set worker to current application's NSTask's new()
+ worker's setLaunchPath:"/bin/bash"
+ worker's setArguments:{resourceDir & "/update.sh", resourceDir & "/runtime"}
+ worker's setStandardOutput:logHandle
+ worker's setStandardError:logHandle
+ set phase to "Updating"
+ try
+  worker's |launch|()
+ on error
+  set worker to missing value
+  set phase to "Update failed — see log"
+ end try
+ my refresh:(missing value)
+end updateEngine:
+
+on quitApp:sender
+ if worker is not missing value then
+  if paused then worker's resume()
+  if (worker's isRunning()) as boolean then worker's terminate()
+ end if
+ continue quit
+end quitApp:
+
+on quit
+ if worker is not missing value then
+  if paused then worker's resume()
+  if (worker's isRunning()) as boolean then worker's terminate()
+ end if
+ if pollTimer is not missing value then pollTimer's invalidate()
+ continue quit
+end quit
