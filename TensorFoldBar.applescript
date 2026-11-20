@@ -16,6 +16,10 @@ property phase : "Stopped"
 property paused : false
 property modelID : "mlx-community/Qwen3.5-2B-MLX-4bit"
 property logPath : ""
+property benchmarkTask : missing value
+property benchmarkItem : missing value
+property benchmarkResult : missing value
+property benchmarkPath : ""
 
 on run
  set logPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar.log"
@@ -30,6 +34,10 @@ on run
  set startItem to my addItem(menu, "Start TensorFold", "startServer:")
  set pauseItem to my addItem(menu, "Pause", "togglePause:")
  set stopItem to my addItem(menu, "Stop and release RAM", "stopServer:")
+ menu's addItem:(current application's NSMenuItem's separatorItem())
+ set benchmarkItem to my addItem(menu, "Run quick benchmark (64 tokens)", "runBenchmark:")
+ set benchmarkResult to my addItem(menu, "Benchmark: not run yet", "statusInfo:")
+ set benchmarkPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar-benchmark.txt"
  menu's addItem:(current application's NSMenuItem's separatorItem())
  my addItem(menu, "Copy API URL", "copyURL:")
  my addItem(menu, "Show log…", "showLog:")
@@ -89,6 +97,7 @@ on togglePause:sender
 end togglePause:
 
 on stopServer:sender
+ my cancelBenchmark()
  if worker is not missing value then
   if paused then worker's resume()
   if (worker's isRunning()) as boolean then
@@ -106,6 +115,17 @@ on stopServer:sender
 end stopServer:
 
 on refresh:sender
+ if benchmarkTask is not missing value then
+  if not ((benchmarkTask's isRunning()) as boolean) then
+   if ((benchmarkTask's terminationStatus()) as integer) is 0 then
+    set resultText to current application's NSString's stringWithContentsOfFile:benchmarkPath encoding:(current application's NSUTF8StringEncoding) |error|:(missing value)
+    if resultText is not missing value then benchmarkResult's setTitle:(resultText as text)
+   else
+    benchmarkResult's setTitle:"Benchmark failed — see log"
+   end if
+   set benchmarkTask to missing value
+  end if
+ end if
  if worker is not missing value then
   if not ((worker's isRunning()) as boolean) then
    set resultCode to (worker's terminationStatus()) as integer
@@ -151,6 +171,8 @@ on refresh:sender
  pauseItem's setEnabled:(phase is "Running")
  stopItem's setEnabled:(worker is not missing value)
  updateItem's setEnabled:(worker is missing value)
+ benchmarkItem's setEnabled:(phase is "Running" and not paused and benchmarkTask is missing value)
+ if benchmarkTask is not missing value then pauseItem's setEnabled:false
  if paused then
   pauseItem's setTitle:"Resume"
  else
@@ -161,6 +183,32 @@ end refresh:
 on statusInfo:sender
  -- Informational row stays enabled so macOS does not dim its status color.
 end statusInfo:
+
+on runBenchmark:sender
+ if phase is not "Running" or paused or benchmarkTask is not missing value then return
+ set resourceDir to ((current application's NSBundle's mainBundle())'s resourcePath()) as text
+ try
+  set benchmarkTask to current application's NSTask's new()
+  benchmarkTask's setLaunchPath:"/usr/bin/ruby"
+  benchmarkTask's setArguments:{resourceDir & "/benchmark.rb", benchmarkPath}
+  benchmarkTask's setStandardOutput:logHandle
+  benchmarkTask's setStandardError:logHandle
+  benchmarkTask's |launch|()
+  benchmarkResult's setTitle:"Benchmark: measuring…"
+ on error
+  set benchmarkTask to missing value
+  benchmarkResult's setTitle:"Benchmark could not start — see log"
+ end try
+ my refresh:(missing value)
+end runBenchmark:
+
+on cancelBenchmark()
+ if benchmarkTask is not missing value then
+  if (benchmarkTask's isRunning()) as boolean then benchmarkTask's terminate()
+  set benchmarkTask to missing value
+  benchmarkResult's setTitle:"Benchmark: cancelled"
+ end if
+end cancelBenchmark
 
 on availableRAM()
  try
@@ -207,6 +255,7 @@ on updateEngine:sender
 end updateEngine:
 
 on quitApp:sender
+ my cancelBenchmark()
  if worker is not missing value then
   if paused then worker's resume()
   if (worker's isRunning()) as boolean then worker's terminate()
@@ -215,6 +264,7 @@ on quitApp:sender
 end quitApp:
 
 on quit
+ my cancelBenchmark()
  if worker is not missing value then
   if paused then worker's resume()
   if (worker's isRunning()) as boolean then worker's terminate()

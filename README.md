@@ -12,6 +12,7 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 - Available RAM: estimated reclaimable memory (free + inactive + speculative pages), refreshed every three seconds. This is an estimate, not Activity Monitor's memory pressure metric.
 - Update TensorFold to latest: available when stopped; fetch the latest upstream Apple Silicon release, verify its published SHA-256 checksum, and replace the bundled engine.
 - Copy API URL and Show log.
+- Quick benchmark: while running, sends one local request for up to 64 output tokens and displays tokens/second, elapsed seconds, and actual output tokens in the menu. Timing includes prompt processing and generation; cached prompts can affect results. This is a quick end-to-end measurement, not a full benchmark suite. Results stay local. Stop or Quit cancels the benchmark.
 
 API URL: `http://127.0.0.1:8080/v1`; model name: `local-model`.
 Logs: `~/Library/Logs/TensorFoldBar.log`.
