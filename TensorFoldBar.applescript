@@ -41,6 +41,7 @@ on run
  set pauseItem to my addItem(menu, "Pause", "togglePause:")
  set stopItem to my addItem(menu, "Stop and release RAM", "stopServer:")
  menu's addItem:(current application's NSMenuItem's separatorItem())
+ set benchmarkItem to my addItem(menu, "Run benchmark", "runBenchmark:")
  set savedTokenCount to (current application's NSUserDefaults's standardUserDefaults())'s integerForKey:"benchmarkTokens"
  if (savedTokenCount as integer) is in {32, 64, 128, 256, 512, 1024, 2048, 4096} then set benchmarkTokens to savedTokenCount as integer
  set tokenSizeItem to my addItem(menu, "Output tokens: " & benchmarkTokens, "statusInfo:")
@@ -52,7 +53,6 @@ on run
   set end of tokenSizeOptions to optionItem
  end repeat
  tokenSizeItem's setSubmenu:tokenMenu
- set benchmarkItem to my addItem(menu, "Run benchmark", "runBenchmark:")
  set benchmarkResult to my addItem(menu, "Benchmark: not run yet", "statusInfo:")
  benchmarkResult's setHidden:true
  set prefillResult to my addItem(menu, "Prefill: unavailable", "statusInfo:")
