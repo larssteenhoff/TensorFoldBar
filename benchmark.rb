@@ -44,7 +44,7 @@ begin
   uri = URI('http://127.0.0.1:8080/v1/chat/completions')
   http = Net::HTTP.new(uri.host, uri.port, nil)
   http.open_timeout = 5
-  http.read_timeout = 90
+  http.read_timeout = 600
   request = Net::HTTP::Post.new(uri.request_uri, 'Content-Type' => 'application/json')
   request.body = JSON.generate(
     model: 'local-model', stream: false, max_tokens: token_limit, temperature: 0,

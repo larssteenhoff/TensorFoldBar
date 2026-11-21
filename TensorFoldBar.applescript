@@ -15,6 +15,11 @@ property logHandle : missing value
 property phase : "Stopped"
 property paused : false
 property modelID : "mlx-community/Qwen3.5-2B-MLX-4bit"
+property modelIndex : 1
+property modelItem : missing value
+property modelOptions : {}
+property modelNames : {"Qwen3.5 2B · 4-bit", "Qwen3.8 27B · 4-bit", "Qwen3.8 Flash Next · 4-bit", "Qwen3.8 Flash Next · 6-bit", "GLM-5.3 Flash · 4-bit (experimental)"}
+property modelRepos : {"mlx-community/Qwen3.5-2B-MLX-4bit", "TensorFold/Qwen3.8-27B-MLX-4bit", "TensorFold/Qwen3.8-Flash-Next-MLX-4bit-MTP", "TensorFold/Qwen3.8-Flash-Next-MLX-6bit-MTP", "TensorFold/GLM-5.3-Flash-MLX-4bit-MTP"}
 property logPath : ""
 property benchmarkTask : missing value
 property benchmarkItem : missing value
@@ -35,7 +40,24 @@ on run
  set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
  set menu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
  set statusLine to my addItem(menu, "TensorFold — Stopped", "statusInfo:")
- my addItem(menu, "Model: Qwen3.5 2B · 4-bit", "statusInfo:")
+ set savedModel to (current application's NSUserDefaults's standardUserDefaults())'s stringForKey:"selectedModelRepo"
+ if savedModel is not missing value then
+  repeat with i from 1 to count of modelRepos
+   if (savedModel as text) is item i of modelRepos then set modelIndex to i
+  end repeat
+ end if
+ set modelID to item modelIndex of modelRepos
+ set modelItem to my addItem(menu, "Model: " & item modelIndex of modelNames, "statusInfo:")
+ set modelMenu to (current application's NSMenu's alloc())'s initWithTitle:"Model"
+ set modelOptions to {}
+ repeat with i from 1 to count of modelNames
+  set modelOption to my addItem(modelMenu, item i of modelNames, "selectModel:")
+  modelOption's setTag:i
+  set end of modelOptions to modelOption
+ end repeat
+ modelMenu's addItem:(current application's NSMenuItem's separatorItem())
+ my addItem(modelMenu, "DeepSeek Flash — unavailable in native runtime…", "deepSeekInfo:")
+ modelItem's setSubmenu:modelMenu
  menu's addItem:(current application's NSMenuItem's separatorItem())
  set startItem to my addItem(menu, "Start TensorFold", "startServer:")
  set pauseItem to my addItem(menu, "Pause", "togglePause:")
@@ -94,7 +116,9 @@ on startServer:sender
  if worker is not missing value then return
  try
   set phase to "Downloading/checking model"
-  my launchWorker({"pull", modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"})
+  set pullTarget to modelID
+  if modelIndex is 1 then set pullTarget to modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"
+  my launchWorker({"pull", pullTarget})
  on error err
   set worker to missing value
   set phase to "Could not start — see log"
@@ -166,7 +190,7 @@ on refresh:sender
    set worker to missing value
    if phase is "Downloading/checking model" and resultCode is 0 then
     try
-     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "8192", "--no-thinking", "--no-update-check"})
+     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "8192", "--parallel", "1", "--no-thinking", "--no-update-check"})
      set phase to "Running"
     on error
      set worker to missing value
@@ -201,6 +225,14 @@ on refresh:sender
  statusTitle's addAttribute:(current application's NSForegroundColorAttributeName) value:(current application's NSColor's labelColor()) range:{location:0, |length|:(statusTitle's |length|())}
  statusTitle's addAttribute:(current application's NSForegroundColorAttributeName) value:dotColor range:{location:0, |length|:1}
  statusLine's setAttributedTitle:statusTitle
+ modelItem's setTitle:("Model: " & item modelIndex of modelNames)
+ repeat with modelOption in modelOptions
+  if (modelOption's tag() as integer) is modelIndex then
+   modelOption's setState:1
+  else
+   modelOption's setState:0
+  end if
+ end repeat
  startItem's setEnabled:(worker is missing value)
  pauseItem's setEnabled:(phase is "Running")
  stopItem's setEnabled:(worker is not missing value)
@@ -232,6 +264,33 @@ end refresh:
 on statusInfo:sender
  -- Informational row stays enabled so macOS does not dim its status color.
 end statusInfo:
+
+on selectModel:sender
+ if worker is not missing value or benchmarkTask is not missing value then
+  my showMessage("Stop TensorFold before changing models", "Choose Stop and release RAM, then select the model you want to use.")
+  return
+ end if
+ set selectedIndex to sender's tag() as integer
+ if selectedIndex < 1 or selectedIndex > (count of modelRepos) then return
+ set modelIndex to selectedIndex
+ set modelID to item modelIndex of modelRepos
+ (current application's NSUserDefaults's standardUserDefaults())'s setObject:modelID forKey:"selectedModelRepo"
+ my hideBenchmarkResults()
+ set benchmarkButtonTitle to "Run benchmark"
+ set phase to "Stopped"
+ my refresh:(missing value)
+end selectModel:
+
+on deepSeekInfo:sender
+ my showMessage("DeepSeek Flash is not available in this runtime", "TensorFold's native release does not yet serve DeepSeek checkpoints. Its older Python 0.6.6 engine has a separate DeepSeek-V4 Flash recipe. Updating model weights cannot add the missing engine support. Choose Qwen3.8 or the experimental GLM option here.")
+end deepSeekInfo:
+
+on showMessage(theTitle, theMessage)
+ set alertBox to current application's NSAlert's new()
+ alertBox's setMessageText:theTitle
+ alertBox's setInformativeText:theMessage
+ alertBox's runModal()
+end showMessage
 
 on runBenchmark:sender
  if phase is not "Running" or paused or benchmarkTask is not missing value then return

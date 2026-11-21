@@ -6,7 +6,8 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 
 ## Controls
 
-- Start: download/check the pinned Qwen3.5-2B MLX 4-bit model, then launch its local server.
+- Model: choose a checkpoint from the submenu. Stop the server before switching; the selected repository is remembered.
+- Start: download/check the selected checkpoint, then launch its local server. The starter Qwen3.5-2B checkpoint is revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
 - Pause / Resume: suspend or resume the server process. Pausing retains model memory and pauses requests.
 - Stop: terminate the server and release its memory.
 - Available RAM: estimated reclaimable memory (free + inactive + speculative pages), refreshed every three seconds. This is an estimate, not Activity Monitor's memory pressure metric.
@@ -16,6 +17,21 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 
 API URL: `http://127.0.0.1:8080/v1`; model name: `local-model`.
 Logs: `~/Library/Logs/TensorFoldBar.log`.
+
+## Model choices
+
+| Menu choice | Checkpoint | Scope |
+| --- | --- | --- |
+| Qwen3.5 2B, 4-bit | `mlx-community/Qwen3.5-2B-MLX-4bit` | Existing starter model, pinned revision |
+| Qwen3.8 27B, 4-bit | `TensorFold/Qwen3.8-27B-MLX-4bit` | Native Metal |
+| Qwen3.8 Flash Next, 4-bit | `TensorFold/Qwen3.8-Flash-Next-MLX-4bit-MTP` | Native Metal, includes MTP |
+| Qwen3.8 Flash Next, 6-bit | `TensorFold/Qwen3.8-Flash-Next-MLX-6bit-MTP` | Native Metal, M5 Ultra checked upstream |
+| GLM-5.3 Flash, 4-bit | `TensorFold/GLM-5.3-Flash-MLX-4bit-MTP` | Experimental on a single Mac; upstream qualifies two M5 Ultras |
+| DeepSeek Flash | Informational menu entry | Native release does not yet serve DeepSeek; the old Python 0.6.6 recipe uses a different engine |
+
+All selectable models serve as `local-model` at the same API URL with an 8,192-token context, one stream, and thinking off. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
+
+Support references: [upstream supported models](https://github.com/ashhart/TensorFold/blob/main/docs/supported-models.md), [Mac runbook](https://github.com/ashhart/TensorFold/blob/main/RUNBOOK.md), and [DeepSeek recipe and engine distinction](https://github.com/ashhart/TensorFold/blob/main/docs/recipes/deepseek-v4-flash.md). These are the documented limits when the picker was added, not a guarantee for future releases.
 
 ## Build
 
