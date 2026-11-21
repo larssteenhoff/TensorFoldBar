@@ -6,6 +6,8 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 
 ## Controls
 
+Opening TensorFold Bar automatically starts the saved model: it checks/downloads the checkpoint, then starts the local server. Pause, Stop, and manual Start remain available in the menu. Opening the app with a newly selected model can start a large download if its weights are not cached.
+
 - Model: choose a checkpoint from the submenu. Stop the server before switching; the selected repository is remembered.
 - Start: download/check the selected checkpoint, then launch its local server. The starter Qwen3.5-2B checkpoint is revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
 - Pause / Resume: suspend or resume the server process. Pausing retains model memory and pauses requests.

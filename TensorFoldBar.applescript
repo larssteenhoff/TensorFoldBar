@@ -90,6 +90,7 @@ on run
  statusItem's setMenu:menu
  set pollTimer to current application's NSTimer's scheduledTimerWithTimeInterval:3 target:me selector:"refresh:" userInfo:(missing value) repeats:true
  my refresh:(missing value)
+ my startServer:(missing value)
 end run
 
 on addItem(theMenu, theTitle, theAction)
