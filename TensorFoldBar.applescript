@@ -21,6 +21,10 @@ property modelOptions : {}
 property modelNames : {"Qwen3.5 2B · 4-bit", "Qwen3.8 27B · 4-bit", "Qwen3.8 Flash Next · 4-bit", "Qwen3.8 Flash Next · 6-bit", "GLM-5.3 Flash · 4-bit (experimental)"}
 property modelRepos : {"mlx-community/Qwen3.5-2B-MLX-4bit", "TensorFold/Qwen3.8-27B-MLX-4bit", "TensorFold/Qwen3.8-Flash-Next-MLX-4bit-MTP", "TensorFold/Qwen3.8-Flash-Next-MLX-6bit-MTP", "TensorFold/GLM-5.3-Flash-MLX-4bit-MTP"}
 property logPath : ""
+property progressPath : ""
+-- pgrep pattern of a download this app did not start (found running at launch); "" when none.
+property adoptedPattern : ""
+property adoptedIsEngine : false
 property benchmarkTask : missing value
 property benchmarkItem : missing value
 property benchmarkResult : missing value
@@ -34,7 +38,11 @@ property ttftResult : missing value
 
 on run
  set logPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar.log"
- (current application's NSFileManager's defaultManager())'s createFileAtPath:logPath |contents|:(missing value) |attributes|:(missing value)
+ set progressPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar-download.txt"
+ -- Append to an existing log: a download still running from an earlier launch writes to it too.
+ if not ((current application's NSFileManager's defaultManager())'s fileExistsAtPath:logPath) as boolean then
+  (current application's NSFileManager's defaultManager())'s createFileAtPath:logPath |contents|:(missing value) |attributes|:(missing value)
+ end if
  set logHandle to current application's NSFileHandle's fileHandleForWritingAtPath:logPath
  logHandle's seekToEndOfFile()
  set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
@@ -89,9 +97,63 @@ on run
  my addItem(mainMenu, "Quit TensorFold Bar", "quitApp:")
  statusItem's setMenu:mainMenu
  set pollTimer to current application's NSTimer's scheduledTimerWithTimeInterval:3 target:me selector:"refresh:" userInfo:(missing value) repeats:true
+ my adoptRunningDownload()
  my refresh:(missing value)
- my startServer:(missing value)
+ if adoptedPattern is "" then my startServer:(missing value)
 end run
+
+on shellOutput(command)
+ try
+  set shellTask to current application's NSTask's new()
+  set pipeOut to current application's NSPipe's pipe()
+  shellTask's setLaunchPath:"/bin/sh"
+  shellTask's setArguments:{"-c", command}
+  shellTask's setStandardOutput:pipeOut
+  shellTask's |launch|()
+  set outputData to (pipeOut's fileHandleForReading())'s readDataToEndOfFile()
+  shellTask's waitUntilExit()
+  return ((current application's NSString's alloc())'s initWithData:outputData encoding:(current application's NSUTF8StringEncoding)) as text
+ on error
+  return ""
+ end try
+end shellOutput
+
+-- A download left running by an earlier copy of this app keeps going; watch it instead of starting a second one.
+on adoptRunningDownload()
+ -- The bracket keeps each pattern from matching the shell that runs pgrep.
+ set ownPattern to "[d]ownload.sh " & modelID
+ set enginePattern to "[t]ensorfold-native pull " & modelID
+ if (my shellOutput("/usr/bin/pgrep -f " & quoted form of ownPattern)) is not "" then
+  set adoptedPattern to ownPattern
+  set adoptedIsEngine to false
+ else if (my shellOutput("/usr/bin/pgrep -f " & quoted form of enginePattern)) is not "" then
+  set adoptedPattern to enginePattern
+  set adoptedIsEngine to true
+ end if
+ if adoptedPattern is not "" then set phase to "Downloading model"
+end adoptRunningDownload
+
+-- "42% (60.1 of 143.4 GiB)" for the download in progress, or "" before the first reading.
+on downloadProgress()
+ if adoptedIsEngine then
+  -- TensorFold's own pull prints "<got> of <needed this run> GiB" lines to the log.
+  return my shellOutput("/usr/bin/tail -c 4096 " & quoted form of logPath & " | /usr/bin/tr '\\r' '\\n' | /usr/bin/grep -o '[0-9.]* of [0-9.]* GiB' | /usr/bin/tail -1 | /usr/bin/awk '$3 > 0 { printf \"%d%% (%s of %s GiB)\", $1 * 100 / $3, $1, $3 }'")
+ end if
+ return my shellOutput("/usr/bin/awk '$2 > 0 { printf \"%d%% (%.1f of %.1f GiB)\", $1 * 100 / $2, $1 / 1073741824, $2 / 1073741824 }' " & quoted form of progressPath & " 2>/dev/null")
+end downloadProgress
+
+on launchDownload()
+ set pullTarget to modelID
+ if modelIndex is 1 then set pullTarget to modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"
+ set resourceDir to ((current application's NSBundle's mainBundle())'s resourcePath()) as text
+ (current application's NSFileManager's defaultManager())'s removeItemAtPath:progressPath |error|:(missing value)
+ set worker to current application's NSTask's new()
+ worker's setLaunchPath:"/bin/bash"
+ worker's setArguments:{resourceDir & "/download.sh", pullTarget, progressPath}
+ worker's setStandardOutput:logHandle
+ worker's setStandardError:logHandle
+ worker's |launch|()
+end launchDownload
 
 on addItem(theMenu, theTitle, theAction)
  set menuEntry to (current application's NSMenuItem's alloc())'s initWithTitle:theTitle action:theAction keyEquivalent:""
@@ -114,12 +176,10 @@ on launchWorker(args)
 end launchWorker
 
 on startServer:sender
- if worker is not missing value then return
+ if worker is not missing value or adoptedPattern is not "" then return
  try
-  set phase to "Downloading/checking model"
-  set pullTarget to modelID
-  if modelIndex is 1 then set pullTarget to modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"
-  my launchWorker({"pull", pullTarget})
+  set phase to "Downloading model"
+  my launchDownload()
  on error err
   set worker to missing value
   set phase to "Could not start — see log"
@@ -144,6 +204,22 @@ end togglePause:
 
 on stopServer:sender
  my cancelBenchmark()
+ if adoptedPattern is not "" then
+  if adoptedIsEngine then
+   set alertBox to current application's NSAlert's new()
+   alertBox's setMessageText:"Stop TensorFold's download?"
+   alertBox's setInformativeText:"This download was started by an older TensorFold Bar through TensorFold itself, which keeps only finished files when it stops. Files still in progress would start over. Downloads this version starts resume where they stopped."
+   alertBox's addButtonWithTitle:"Keep downloading"
+   alertBox's addButtonWithTitle:"Stop anyway"
+   if (alertBox's runModal()) as integer is not 1001 then return
+  end if
+  my shellOutput("/usr/bin/pkill -TERM -f " & quoted form of adoptedPattern)
+  set adoptedPattern to ""
+  set adoptedIsEngine to false
+  set phase to "Stopped"
+  my refresh:(missing value)
+  return
+ end if
  if worker is not missing value then
   if paused then worker's resume()
   if (worker's isRunning()) as boolean then
@@ -189,7 +265,20 @@ on refresh:sender
   if not ((worker's isRunning()) as boolean) then
    set resultCode to (worker's terminationStatus()) as integer
    set worker to missing value
-   if phase is "Downloading/checking model" and resultCode is 0 then
+   if phase is "Downloading model" and resultCode is 0 then
+    -- TensorFold confirms the files it finds cached before serving them.
+    try
+     set pullTarget to modelID
+     if modelIndex is 1 then set pullTarget to modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"
+     my launchWorker({"pull", pullTarget})
+     set phase to "Checking model"
+    on error
+     set worker to missing value
+     set phase to "Check failed — see log"
+    end try
+   else if phase is "Downloading model" then
+    set phase to "Download paused — Start resumes it"
+   else if phase is "Checking model" and resultCode is 0 then
     try
      my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "65536", "--parallel", "1", "--no-thinking", "--no-update-check"})
      set phase to "Running"
@@ -211,17 +300,32 @@ on refresh:sender
    set paused to false
   end if
  end if
+ if adoptedPattern is not "" then
+  if (my shellOutput("/usr/bin/pgrep -f " & quoted form of adoptedPattern)) is "" then
+   -- The adopted download ended; Start downloads whatever it left missing (nothing, when it finished) and serves.
+   set adoptedPattern to ""
+   set adoptedIsEngine to false
+   my startServer:(missing value)
+   return
+  end if
+ end if
  set labelText to phase
+ set progressText to ""
+ if phase is "Downloading model" then
+  set progressText to my downloadProgress()
+  if progressText is not "" then set labelText to "Downloading model " & progressText
+ end if
  if paused then set labelText to "Paused"
  set ramText to my availableRAM()
  set marker to "○"
- if worker is not missing value then set marker to "●"
+ if worker is not missing value or adoptedPattern is not "" then set marker to "●"
  if paused then set marker to "Ⅱ"
+ if progressText is not "" then set marker to marker & " " & (word 1 of progressText) & "%"
  (statusItem's button())'s setTitle:("TF " & marker & " · " & ramText & " GB available")
  set dotColor to current application's NSColor's secondaryLabelColor()
  if phase is "Running" then set dotColor to current application's NSColor's systemGreenColor()
  if paused then set dotColor to current application's NSColor's systemOrangeColor()
- if phase is "Updating" or phase is "Downloading/checking model" then set dotColor to current application's NSColor's systemOrangeColor()
+ if phase is "Updating" or phase is "Downloading model" or phase is "Checking model" then set dotColor to current application's NSColor's systemOrangeColor()
  set statusTitle to (current application's NSMutableAttributedString's alloc())'s initWithString:("● TensorFold — " & labelText)
  statusTitle's addAttribute:(current application's NSForegroundColorAttributeName) value:(current application's NSColor's labelColor()) range:{location:0, |length|:(statusTitle's |length|())}
  statusTitle's addAttribute:(current application's NSForegroundColorAttributeName) value:dotColor range:{location:0, |length|:1}
@@ -234,10 +338,10 @@ on refresh:sender
    modelOption's setState:0
   end if
  end repeat
- startItem's setEnabled:(worker is missing value)
+ startItem's setEnabled:(worker is missing value and adoptedPattern is "")
  pauseItem's setEnabled:(phase is "Running")
- stopItem's setEnabled:(worker is not missing value)
- updateItem's setEnabled:(worker is missing value)
+ stopItem's setEnabled:(worker is not missing value or adoptedPattern is not "")
+ updateItem's setEnabled:(worker is missing value and adoptedPattern is "")
  benchmarkItem's setEnabled:(phase is "Running" and not paused and benchmarkTask is missing value)
  tokenSizeItem's setTitle:("Output tokens: " & benchmarkTokens)
  tokenSizeItem's setEnabled:(benchmarkTask is missing value)
@@ -267,7 +371,7 @@ on statusInfo:sender
 end statusInfo:
 
 on selectModel:sender
- if worker is not missing value or benchmarkTask is not missing value then
+ if worker is not missing value or adoptedPattern is not "" or benchmarkTask is not missing value then
   my showMessage("Stop TensorFold before changing models", "Choose Stop and release RAM, then select the model you want to use.")
   return
  end if

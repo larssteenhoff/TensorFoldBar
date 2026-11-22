@@ -9,9 +9,10 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 Opening TensorFold Bar automatically starts the saved model: it checks/downloads the checkpoint, then starts the local server. Pause, Stop, and manual Start remain available in the menu. Opening the app with a newly selected model can start a large download if its weights are not cached.
 
 - Model: choose a checkpoint from the submenu. Stop the server before switching; the selected repository is remembered.
-- Start: download/check the selected checkpoint, then launch its local server. The starter Qwen3.5-2B checkpoint is revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
+- Start: download the selected checkpoint, have TensorFold check it, then launch its local server. The starter Qwen3.5-2B checkpoint is revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
 - Pause / Resume: suspend or resume the server process. Pausing retains model memory and pauses requests.
-- Stop: terminate the server and release its memory.
+- Stop: terminate the server and release its memory, or stop a download in progress.
+- Download progress: while a checkpoint downloads, the menu bar shows its percentage and the status row shows downloaded and total GiB.
 - Available RAM: estimated reclaimable memory (free + inactive + speculative pages), refreshed every three seconds. This is an estimate, not Activity Monitor's memory pressure metric.
 - Update TensorFold to latest: available when stopped; fetch the latest upstream Apple Silicon release, verify its published SHA-256 checksum, and replace the bundled engine.
 - Copy API URL and Show log.
@@ -19,6 +20,12 @@ Opening TensorFold Bar automatically starts the saved model: it checks/downloads
 
 API URL: `http://127.0.0.1:8080/v1`; model name: `local-model`.
 Logs: `~/Library/Logs/TensorFoldBar.log`.
+
+## Downloads
+
+`download.sh` fetches checkpoints into the standard Hugging Face cache (`~/.cache/huggingface/hub`, or `HF_HUB_CACHE`/`HF_HOME`). Each file is split into 64 MiB pieces fetched 16 at a time with HTTP range requests; a piece keeps every byte written, so Stop, Quit, a crash, or a restart of the Mac loses nothing, and the next Start requests only the missing bytes. A finished file is joined and checked against the hub's size and SHA-256 before it is put in place, after which `tensorfold pull` confirms the cached files and the server starts. `HF_TOKEN`, or the token saved by `hf auth login`, is sent for gated repositories.
+
+TensorFold's own `pull` keeps only finished files when it is stopped, so the app no longer uses it to download. If TensorFold Bar opens while a download started by an earlier copy is still running, it shows that download's progress instead of starting a second one, and asks before stopping a `tensorfold pull`.
 
 ## Model choices
 
@@ -54,6 +61,6 @@ Move the resulting app to a writable location. Updates modify its bundled runtim
 
 ## Status
 
-Initial prototype. AppleScript source compiles, but launch and server controls still need validation on the target Mac. “Running” currently means the server process started; the model may still be loading. Updates require stopping the server first. Closing the app terminates the server it owns.
+Initial prototype. AppleScript source compiles, but launch and server controls still need validation on the target Mac. “Running” currently means the server process started; the model may still be loading. Updates require stopping the server first. Closing the app terminates the server it owns and stops its download, which resumes on the next Start.
 
 TensorFold and downloaded models retain their upstream licenses. Model weights and third-party runtime binaries are not included in this source repository.
