@@ -31,7 +31,7 @@ Logs: `~/Library/Logs/TensorFoldBar.log`.
 | GLM-5.3 Flash, 4-bit | `TensorFold/GLM-5.3-Flash-MLX-4bit-MTP` | Experimental on a single Mac; upstream qualifies two M5 Ultras |
 | DeepSeek Flash | Informational menu entry | Native release does not yet serve DeepSeek; the old Python 0.6.6 recipe uses a different engine |
 
-All selectable models serve as `local-model` at the same API URL with an 8,192-token context, one stream, and thinking off. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
+All selectable models serve as `local-model` at the same API URL with a 65,536-token context, one stream, and thinking off. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
 
 Support references: [upstream supported models](https://github.com/ashhart/TensorFold/blob/main/docs/supported-models.md), [Mac runbook](https://github.com/ashhart/TensorFold/blob/main/RUNBOOK.md), and [DeepSeek recipe and engine distinction](https://github.com/ashhart/TensorFold/blob/main/docs/recipes/deepseek-v4-flash.md). These are the documented limits when the picker was added, not a guarantee for future releases.
 

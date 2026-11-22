@@ -191,7 +191,7 @@ on refresh:sender
    set worker to missing value
    if phase is "Downloading/checking model" and resultCode is 0 then
     try
-     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "8192", "--parallel", "1", "--no-thinking", "--no-update-check"})
+     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "65536", "--parallel", "1", "--no-thinking", "--no-update-check"})
      set phase to "Running"
     on error
      set worker to missing value
