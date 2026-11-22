@@ -9,6 +9,7 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 Opening TensorFold Bar automatically starts the saved model: it checks/downloads the checkpoint, then starts the local server. Pause, Stop, and manual Start remain available in the menu. Opening the app with a newly selected model can start a large download if its weights are not cached.
 
 - Model: choose a checkpoint from the submenu. Stop the server before switching; the selected repository is remembered.
+- Context: choose the server's context window, 32K to 1M tokens. Only windows the selected model declares (its `max_position_embeddings`) are listed: 256K for the Qwen models, 1M for GLM-5.3 Flash. Choosing a new window restarts a running server; switching to a model with a shorter limit lowers the setting to fit. The choice is remembered and also written to DeepSeek Harness's TensorFold model entry (`contextWindow` in `~/.dsh/profiles/desktop/cordis.patch.yml`), so restart Harness to pick it up. Longer windows take more memory for the KV cache and slow long prompts.
 - Start: download the selected checkpoint, have TensorFold check it, then launch its local server. The starter Qwen3.5-2B checkpoint is revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
 - Pause / Resume: suspend or resume the server process. Pausing retains model memory and pauses requests.
 - Stop: terminate the server and release its memory, or stop a download in progress.
@@ -38,7 +39,7 @@ TensorFold's own `pull` keeps only finished files when it is stopped, so the app
 | GLM-5.3 Flash, 4-bit | `TensorFold/GLM-5.3-Flash-MLX-4bit-MTP` | Experimental on a single Mac; upstream qualifies two M5 Ultras |
 | DeepSeek Flash | Informational menu entry | Native release does not yet serve DeepSeek; the old Python 0.6.6 recipe uses a different engine |
 
-All selectable models serve as `local-model` at the same API URL with a 65,536-token context, one stream, and thinking off. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
+All selectable models serve as `local-model` at the same API URL with the context chosen in the Context menu (default 64K), one stream, and thinking off. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
 
 Support references: [upstream supported models](https://github.com/ashhart/TensorFold/blob/main/docs/supported-models.md), [Mac runbook](https://github.com/ashhart/TensorFold/blob/main/RUNBOOK.md), and [DeepSeek recipe and engine distinction](https://github.com/ashhart/TensorFold/blob/main/docs/recipes/deepseek-v4-flash.md). These are the documented limits when the picker was added, not a guarantee for future releases.
 

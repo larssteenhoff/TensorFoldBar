@@ -31,6 +31,13 @@ property benchmarkResult : missing value
 property benchmarkPath : ""
 property benchmarkButtonTitle : "Run benchmark"
 property benchmarkTokens : 64
+property contextTokens : 65536
+property contextChoices : {32768, 65536, 131072, 262144, 524288, 1048576}
+-- Longest context each entry of modelRepos declares (config.json max_position_embeddings).
+property modelMaxContext : {262144, 262144, 262144, 262144, 1048576}
+property contextItem : missing value
+property contextOptions : {}
+property restartPending : false
 property tokenSizeItem : missing value
 property tokenSizeOptions : {}
 property prefillResult : missing value
@@ -66,6 +73,18 @@ on run
  modelMenu's addItem:(current application's NSMenuItem's separatorItem())
  my addItem(modelMenu, "DeepSeek Flash — unavailable in native runtime…", "deepSeekInfo:")
  modelItem's setSubmenu:modelMenu
+ set savedContext to (current application's NSUserDefaults's standardUserDefaults())'s integerForKey:"contextTokens"
+ if (savedContext as integer) is in contextChoices then set contextTokens to savedContext as integer
+ my fitContextToModel()
+ set contextItem to my addItem(mainMenu, "Context: " & my contextLabel(contextTokens), "statusInfo:")
+ set contextMenu to (current application's NSMenu's alloc())'s initWithTitle:"Context"
+ set contextOptions to {}
+ repeat with choice in contextChoices
+  set optionItem to my addItem(contextMenu, my contextLabel(choice as integer) & " tokens", "setContextTokens:")
+  optionItem's setTag:(choice as integer)
+  set end of contextOptions to optionItem
+ end repeat
+ contextItem's setSubmenu:contextMenu
  mainMenu's addItem:(current application's NSMenuItem's separatorItem())
  set startItem to my addItem(mainMenu, "Start TensorFold", "startServer:")
  set pauseItem to my addItem(mainMenu, "Pause", "togglePause:")
@@ -280,7 +299,7 @@ on refresh:sender
     set phase to "Download paused — Start resumes it"
    else if phase is "Checking model" and resultCode is 0 then
     try
-     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", "65536", "--parallel", "1", "--no-thinking", "--no-update-check"})
+     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", contextTokens as text, "--parallel", "1", "--no-thinking", "--no-update-check"})
      set phase to "Running"
     on error
      set worker to missing value
@@ -294,6 +313,12 @@ on refresh:sender
     end if
    else if phase is "Stopping" then
     set phase to "Stopped"
+    if restartPending then
+     set restartPending to false
+     set worker to missing value
+     my startServer:(missing value)
+     return
+    end if
    else
     set phase to "Exited (" & resultCode & ") — see log"
    end if
@@ -343,6 +368,15 @@ on refresh:sender
  stopItem's setEnabled:(worker is not missing value or adoptedPattern is not "")
  updateItem's setEnabled:(worker is missing value and adoptedPattern is "")
  benchmarkItem's setEnabled:(phase is "Running" and not paused and benchmarkTask is missing value)
+ contextItem's setTitle:("Context: " & my contextLabel(contextTokens))
+ repeat with optionItem in contextOptions
+  optionItem's setHidden:((optionItem's tag() as integer) > (item modelIndex of modelMaxContext))
+  if (optionItem's tag() as integer) is contextTokens then
+   optionItem's setState:1
+  else
+   optionItem's setState:0
+  end if
+ end repeat
  tokenSizeItem's setTitle:("Output tokens: " & benchmarkTokens)
  tokenSizeItem's setEnabled:(benchmarkTask is missing value)
  repeat with optionItem in tokenSizeOptions
@@ -379,6 +413,7 @@ on selectModel:sender
  if selectedIndex < 1 or selectedIndex > (count of modelRepos) then return
  set modelIndex to selectedIndex
  set modelID to item modelIndex of modelRepos
+ my fitContextToModel()
  (current application's NSUserDefaults's standardUserDefaults())'s setObject:modelID forKey:"selectedModelRepo"
  my hideBenchmarkResults()
  set benchmarkButtonTitle to "Run benchmark"
@@ -430,6 +465,44 @@ on hideBenchmarkResults()
  if prefillResult is not missing value then prefillResult's setHidden:true
  if ttftResult is not missing value then ttftResult's setHidden:true
 end hideBenchmarkResults
+
+-- "64K" for 65536, "1M" for 1048576.
+on contextLabel(tokens)
+ if tokens ≥ 1048576 then return ((tokens div 1048576) as text) & "M"
+ return ((tokens div 1024) as text) & "K"
+end contextLabel
+
+-- Lower the window to the largest choice the selected model declares when it asks for more.
+on fitContextToModel()
+ set limit to item modelIndex of modelMaxContext
+ if contextTokens ≤ limit then return
+ repeat with choice in contextChoices
+  if (choice as integer) ≤ limit then set contextTokens to choice as integer
+ end repeat
+ (current application's NSUserDefaults's standardUserDefaults())'s setInteger:contextTokens forKey:"contextTokens"
+ my syncHarnessContext()
+end fitContextToModel
+
+on setContextTokens:sender
+ set chosen to sender's tag() as integer
+ if chosen is contextTokens then return
+ set contextTokens to chosen
+ (current application's NSUserDefaults's standardUserDefaults())'s setInteger:contextTokens forKey:"contextTokens"
+ my syncHarnessContext()
+ -- A running server keeps the window it started with; restart it so the new one applies.
+ if phase is "Running" then
+  set restartPending to true
+  my stopServer:(missing value)
+ end if
+ my refresh:(missing value)
+end setContextTokens:
+
+-- Keep DeepSeek Harness's TensorFold model entry at the served window so its compaction plans fit.
+on syncHarnessContext()
+ set patchPath to ((current application's NSHomeDirectory()) as text) & "/.dsh/profiles/desktop/cordis.patch.yml"
+ if not ((current application's NSFileManager's defaultManager())'s fileExistsAtPath:patchPath) as boolean then return
+ my shellOutput("f=" & quoted form of patchPath & "; /usr/bin/awk -v n=" & contextTokens & " '/^ *tensorfold:[[:space:]]*$/ { inside = 1 } inside && /^ *contextWindow:/ { sub(/contextWindow:.*/, \"contextWindow: \" n); inside = 0 } { print }' \"$f\" > \"$f.tmp\" && /bin/mv \"$f.tmp\" \"$f\"")
+end syncHarnessContext
 
 on setBenchmarkTokens:sender
  if benchmarkTask is not missing value then return
