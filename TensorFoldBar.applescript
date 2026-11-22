@@ -32,7 +32,7 @@ property benchmarkPath : ""
 property benchmarkButtonTitle : "Run benchmark"
 property benchmarkTokens : 64
 property contextTokens : 65536
-property contextChoices : {32768, 65536, 131072, 262144, 524288, 1048576}
+property contextChoices : {4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576}
 -- Longest context each entry of modelRepos declares (config.json max_position_embeddings).
 property modelMaxContext : {262144, 262144, 262144, 262144, 1048576}
 property contextItem : missing value
