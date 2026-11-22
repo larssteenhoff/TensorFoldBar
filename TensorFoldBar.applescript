@@ -28,6 +28,8 @@ property adoptedIsEngine : false
 property benchmarkTask : missing value
 property benchmarkItem : missing value
 property benchmarkResult : missing value
+-- Model and context the running benchmark measures, e.g. "Qwen3.8 Flash Next · 6-bit, 64K".
+property benchmarkLabel : ""
 property benchmarkPath : ""
 property benchmarkButtonTitle : "Run benchmark"
 property benchmarkTokens : 64
@@ -52,7 +54,13 @@ on run
  end if
  set logHandle to current application's NSFileHandle's fileHandleForWritingAtPath:logPath
  logHandle's seekToEndOfFile()
- set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
+ -- A fixed width sized for the longest title, with equal-width digits, keeps the item from
+ -- resizing (and nudging its neighbours) each time the RAM reading or download percentage changes.
+ set barFont to current application's NSFont's monospacedDigitSystemFontOfSize:0 weight:(current application's NSFontWeightRegular)
+ set widestTitle to current application's NSString's stringWithString:"TF Ⅱ 100% · 888.8 GB available"
+ set titleSize to widestTitle's sizeWithAttributes:{NSFont:barFont}
+ set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:((width of titleSize) + 16)
+ (statusItem's button())'s setFont:barFont
  set mainMenu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
  set statusLine to my addItem(mainMenu, "TensorFold — Stopped", "statusInfo:")
  set savedModel to (current application's NSUserDefaults's standardUserDefaults())'s stringForKey:"selectedModelRepo"
@@ -263,7 +271,9 @@ on refresh:sender
     if resultText is not missing value then
      set resultRows to resultText's componentsSeparatedByString:(current application's NSString's stringWithString:(character id 10))
      if (resultRows's |count|()) as integer is not 3 then error "Incomplete benchmark results"
-     benchmarkResult's setTitle:(resultRows's objectAtIndex:0)
+     set firstRow to (resultRows's objectAtIndex:0) as text
+     if firstRow starts with "Benchmark:" and benchmarkLabel is not "" then set firstRow to "Benchmark (" & benchmarkLabel & "):" & (text 11 thru -1 of firstRow)
+     benchmarkResult's setTitle:firstRow
      prefillResult's setTitle:(resultRows's objectAtIndex:1)
      ttftResult's setTitle:(resultRows's objectAtIndex:2)
      benchmarkResult's setHidden:false
@@ -342,11 +352,11 @@ on refresh:sender
  end if
  if paused then set labelText to "Paused"
  set ramText to my availableRAM()
- set marker to "○"
- if worker is not missing value or adoptedPattern is not "" then set marker to "●"
- if paused then set marker to "Ⅱ"
+ -- The menu bar shows only what needs attention: a pause mark or the download percentage.
+ set marker to ""
+ if paused then set marker to " Ⅱ"
  if progressText is not "" then set marker to marker & " " & (word 1 of progressText) & "%"
- (statusItem's button())'s setTitle:("TF " & marker & " · " & ramText & " GB available")
+ (statusItem's button())'s setTitle:("TF" & marker & " · " & ramText & " GB available")
  set dotColor to current application's NSColor's secondaryLabelColor()
  if phase is "Running" then set dotColor to current application's NSColor's systemGreenColor()
  if paused then set dotColor to current application's NSColor's systemOrangeColor()
@@ -438,6 +448,7 @@ on runBenchmark:sender
  set benchmarkButtonTitle to "Run benchmark"
  set resourceDir to ((current application's NSBundle's mainBundle())'s resourcePath()) as text
  try
+  set benchmarkLabel to (item modelIndex of modelNames) & ", " & my contextLabel(contextTokens)
   set benchmarkTask to current application's NSTask's new()
   benchmarkTask's setLaunchPath:"/usr/bin/ruby"
   benchmarkTask's setArguments:{resourceDir & "/benchmark.rb", benchmarkPath, benchmarkTokens as text}
