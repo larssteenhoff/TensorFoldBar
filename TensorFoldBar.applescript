@@ -38,8 +38,8 @@ on run
  set logHandle to current application's NSFileHandle's fileHandleForWritingAtPath:logPath
  logHandle's seekToEndOfFile()
  set statusItem to (current application's NSStatusBar's systemStatusBar())'s statusItemWithLength:(current application's NSVariableStatusItemLength)
- set menu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
- set statusLine to my addItem(menu, "TensorFold — Stopped", "statusInfo:")
+ set mainMenu to (current application's NSMenu's alloc())'s initWithTitle:"TensorFold"
+ set statusLine to my addItem(mainMenu, "TensorFold — Stopped", "statusInfo:")
  set savedModel to (current application's NSUserDefaults's standardUserDefaults())'s stringForKey:"selectedModelRepo"
  if savedModel is not missing value then
   repeat with i from 1 to count of modelRepos
@@ -47,7 +47,7 @@ on run
   end repeat
  end if
  set modelID to item modelIndex of modelRepos
- set modelItem to my addItem(menu, "Model: " & item modelIndex of modelNames, "statusInfo:")
+ set modelItem to my addItem(mainMenu, "Model: " & item modelIndex of modelNames, "statusInfo:")
  set modelMenu to (current application's NSMenu's alloc())'s initWithTitle:"Model"
  set modelOptions to {}
  repeat with i from 1 to count of modelNames
@@ -58,15 +58,15 @@ on run
  modelMenu's addItem:(current application's NSMenuItem's separatorItem())
  my addItem(modelMenu, "DeepSeek Flash — unavailable in native runtime…", "deepSeekInfo:")
  modelItem's setSubmenu:modelMenu
- menu's addItem:(current application's NSMenuItem's separatorItem())
- set startItem to my addItem(menu, "Start TensorFold", "startServer:")
- set pauseItem to my addItem(menu, "Pause", "togglePause:")
- set stopItem to my addItem(menu, "Stop and release RAM", "stopServer:")
- menu's addItem:(current application's NSMenuItem's separatorItem())
- set benchmarkItem to my addItem(menu, "Run benchmark", "runBenchmark:")
+ mainMenu's addItem:(current application's NSMenuItem's separatorItem())
+ set startItem to my addItem(mainMenu, "Start TensorFold", "startServer:")
+ set pauseItem to my addItem(mainMenu, "Pause", "togglePause:")
+ set stopItem to my addItem(mainMenu, "Stop and release RAM", "stopServer:")
+ mainMenu's addItem:(current application's NSMenuItem's separatorItem())
+ set benchmarkItem to my addItem(mainMenu, "Run benchmark", "runBenchmark:")
  set savedTokenCount to (current application's NSUserDefaults's standardUserDefaults())'s integerForKey:"benchmarkTokens"
  if (savedTokenCount as integer) is in {32, 64, 128, 256, 512, 1024, 2048, 4096} then set benchmarkTokens to savedTokenCount as integer
- set tokenSizeItem to my addItem(menu, "Output tokens: " & benchmarkTokens, "statusInfo:")
+ set tokenSizeItem to my addItem(mainMenu, "Output tokens: " & benchmarkTokens, "statusInfo:")
  set tokenMenu to (current application's NSMenu's alloc())'s initWithTitle:"Output tokens"
  set tokenSizeOptions to {}
  repeat with tokenCount in {32, 64, 128, 256, 512, 1024, 2048, 4096}
@@ -75,19 +75,19 @@ on run
   set end of tokenSizeOptions to optionItem
  end repeat
  tokenSizeItem's setSubmenu:tokenMenu
- set benchmarkResult to my addItem(menu, "Benchmark: not run yet", "statusInfo:")
+ set benchmarkResult to my addItem(mainMenu, "Benchmark: not run yet", "statusInfo:")
  benchmarkResult's setHidden:true
- set prefillResult to my addItem(menu, "Prefill: unavailable", "statusInfo:")
- set ttftResult to my addItem(menu, "Time to first token: unavailable", "statusInfo:")
+ set prefillResult to my addItem(mainMenu, "Prefill: unavailable", "statusInfo:")
+ set ttftResult to my addItem(mainMenu, "Time to first token: unavailable", "statusInfo:")
  my hideBenchmarkResults()
  set benchmarkPath to ((current application's NSHomeDirectory()) as text) & "/Library/Logs/TensorFoldBar-benchmark.txt"
- menu's addItem:(current application's NSMenuItem's separatorItem())
- my addItem(menu, "Copy API URL", "copyURL:")
- my addItem(menu, "Show log…", "showLog:")
- set updateItem to my addItem(menu, "Update TensorFold to latest…", "updateEngine:")
- menu's addItem:(current application's NSMenuItem's separatorItem())
- my addItem(menu, "Quit TensorFold Bar", "quitApp:")
- statusItem's setMenu:menu
+ mainMenu's addItem:(current application's NSMenuItem's separatorItem())
+ my addItem(mainMenu, "Copy API URL", "copyURL:")
+ my addItem(mainMenu, "Show log…", "showLog:")
+ set updateItem to my addItem(mainMenu, "Update TensorFold to latest…", "updateEngine:")
+ mainMenu's addItem:(current application's NSMenuItem's separatorItem())
+ my addItem(mainMenu, "Quit TensorFold Bar", "quitApp:")
+ statusItem's setMenu:mainMenu
  set pollTimer to current application's NSTimer's scheduledTimerWithTimeInterval:3 target:me selector:"refresh:" userInfo:(missing value) repeats:true
  my refresh:(missing value)
  my startServer:(missing value)
