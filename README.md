@@ -20,7 +20,7 @@ Opening TensorFold Bar automatically starts the saved model: it checks/downloads
 - Copy API URL and Show log.
 - Benchmark: sends one local request for up to the selected output token limit. Choose 32–4,096 tokens from the Output tokens submenu (default: 64); the choice is remembered. While measuring, the menu says “Benchmark running…”; result rows appear only after successful completion. It measures the model the server has loaded (`local-model`), and the first result row names that model and the context window, for example “Benchmark (Qwen3.8 Flash Next · 6-bit, 64K)”. Results include overall output tokens/second, elapsed seconds, prefill speed, and time to first token. Prefill and first-token times come from TensorFold's per-response `tensorfold.prefill_seconds` and `tensorfold.time_to_first_token` fields. Prefill speed uses uncached prompt tokens; fully cached prompts are labeled, and missing timing/count fields show unavailable. Overall speed includes prompt processing and generation. This is an end-to-end measurement; cached prompts affect results. Results stay local. Stop or Quit cancels the benchmark.
 
-API URL: `http://127.0.0.1:8080/v1`; model name: `local-model`.
+API URL: `http://127.0.0.1:8080/v1`; model name: the served id, or `local-model`.
 Logs: `~/Library/Logs/TensorFoldBar.log`.
 
 ## Downloads
@@ -40,7 +40,7 @@ TensorFold's own `pull` keeps only finished files when it is stopped, so the app
 | GLM-5.3 Flash, 4-bit | `TensorFold/GLM-5.3-Flash-MLX-4bit-MTP` | Experimental on a single Mac; upstream qualifies two M5 Ultras |
 | DeepSeek Flash | Informational menu entry | Native release does not yet serve DeepSeek; the old Python 0.6.6 recipe uses a different engine |
 
-All selectable models serve as `local-model` at the same API URL with the context chosen in the Context menu (default 64K), one stream, and thinking off. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
+Every model serves at the same API URL under its own id (for example `qwen3.8-flash-next`), with `local-model` as an alias, with the context chosen in the Context menu (default 64K), one stream, and thinking off. Inkling 2 Mini (experimental) also reads images (`--vision`) and keeps its reasoning on; it runs on a TensorFold built from pull requests #4337 and #4124 in `~/GitHub/TensorFold-inkling`, because the bundled runtime cannot load it. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
 
 Support references: [upstream supported models](https://github.com/ashhart/TensorFold/blob/main/docs/supported-models.md), [Mac runbook](https://github.com/ashhart/TensorFold/blob/main/RUNBOOK.md), and [DeepSeek recipe and engine distinction](https://github.com/ashhart/TensorFold/blob/main/docs/recipes/deepseek-v4-flash.md). These are the documented limits when the picker was added, not a guarantee for future releases.
 

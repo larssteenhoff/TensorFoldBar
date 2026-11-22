@@ -18,8 +18,15 @@ property modelID : "mlx-community/Qwen3.5-2B-MLX-4bit"
 property modelIndex : 1
 property modelItem : missing value
 property modelOptions : {}
-property modelNames : {"Qwen3.5 2B · 4-bit", "Qwen3.8 27B · 4-bit", "Qwen3.8 Flash Next · 4-bit", "Qwen3.8 Flash Next · 6-bit", "GLM-5.3 Flash · 4-bit (experimental)"}
-property modelRepos : {"mlx-community/Qwen3.5-2B-MLX-4bit", "TensorFold/Qwen3.8-27B-MLX-4bit", "TensorFold/Qwen3.8-Flash-Next-MLX-4bit-MTP", "TensorFold/Qwen3.8-Flash-Next-MLX-6bit-MTP", "TensorFold/GLM-5.3-Flash-MLX-4bit-MTP"}
+property modelNames : {"Qwen3.5 2B · 4-bit", "Qwen3.8 27B · 4-bit", "Qwen3.8 Flash Next · 4-bit", "Qwen3.8 Flash Next · 6-bit", "GLM-5.3 Flash · 4-bit (experimental)", "Inkling 2 Mini · vision (experimental)"}
+property modelRepos : {"mlx-community/Qwen3.5-2B-MLX-4bit", "TensorFold/Qwen3.8-27B-MLX-4bit", "TensorFold/Qwen3.8-Flash-Next-MLX-4bit-MTP", "TensorFold/Qwen3.8-Flash-Next-MLX-6bit-MTP", "TensorFold/GLM-5.3-Flash-MLX-4bit-MTP", "thinkingmachines/Inkling-2-Mini"}
+-- The id each model is served under; `local-model` stays an alias for clients that name it.
+property servedNames : {"qwen3.5-2b", "qwen3.8-27b", "qwen3.8-flash-next", "qwen3.8-flash-next", "glm-5.3-flash", "inkling-2-mini"}
+-- Revisions pinned for a download; "" downloads the repository's main branch.
+property modelRevisions : {"93760be4f1f69842a46bc13dbdc0f19e291392a3", "", "", "", "", "ed40e7da625f594fc9c4990f5f66be24873c22d7"}
+-- Inkling 2 Mini needs TensorFold built from its open pull requests (#4337 Metal with vision, #4124
+-- reply parsing); the bundled runtime cannot load it. Relative to the home folder.
+property inklingRuntime : "/GitHub/TensorFold-inkling/zig-out/native/bin/tensorfold-native"
 property logPath : ""
 property progressPath : ""
 -- pgrep pattern of a download this app did not start (found running at launch); "" when none.
@@ -36,7 +43,7 @@ property benchmarkTokens : 64
 property contextTokens : 65536
 property contextChoices : {4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576}
 -- Longest context each entry of modelRepos declares (config.json max_position_embeddings).
-property modelMaxContext : {262144, 262144, 262144, 262144, 1048576}
+property modelMaxContext : {262144, 262144, 262144, 262144, 1048576, 1048576}
 property contextItem : missing value
 property contextOptions : {}
 property restartPending : false
@@ -169,9 +176,31 @@ on downloadProgress()
  return my shellOutput("/usr/bin/awk '$2 > 0 { printf \"%d%% (%.1f of %.1f GiB)\", $1 * 100 / $2, $1 / 1073741824, $2 / 1073741824 }' " & quoted form of progressPath & " 2>/dev/null")
 end downloadProgress
 
+-- The repository with its pinned revision, if it has one.
+on pinnedTarget()
+ set revision to item modelIndex of modelRevisions
+ if revision is "" then return modelID
+ return modelID & "@" & revision
+end pinnedTarget
+
+on isInkling()
+ return modelID is "thinkingmachines/Inkling-2-Mini"
+end isInkling
+
+-- What `serve` runs with: the model under its own id, with `local-model` as an alias. Inkling
+-- reads images and always reasons, so it gets --vision and not --no-thinking.
+on serveArguments()
+ set args to {"serve", modelID, "--name", item modelIndex of servedNames, "--alias", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", contextTokens as text, "--parallel", "1", "--no-update-check"}
+ if my isInkling() then
+  set end of args to "--vision"
+ else
+  set end of args to "--no-thinking"
+ end if
+ return args
+end serveArguments
+
 on launchDownload()
- set pullTarget to modelID
- if modelIndex is 1 then set pullTarget to modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"
+ set pullTarget to my pinnedTarget()
  set resourceDir to ((current application's NSBundle's mainBundle())'s resourcePath()) as text
  (current application's NSFileManager's defaultManager())'s removeItemAtPath:progressPath |error|:(missing value)
  set worker to current application's NSTask's new()
@@ -190,6 +219,7 @@ on addItem(theMenu, theTitle, theAction)
 end addItem
 
 on binaryPath()
+ if my isInkling() then return ((current application's NSHomeDirectory()) as text) & inklingRuntime
  return (((current application's NSBundle's mainBundle())'s resourcePath()) as text) & "/runtime/bin/tensorfold-native"
 end binaryPath
 
@@ -204,6 +234,12 @@ end launchWorker
 
 on startServer:sender
  if worker is not missing value or adoptedPattern is not "" then return
+ if my isInkling() and not ((current application's NSFileManager's defaultManager())'s isExecutableFileAtPath:(my binaryPath())) as boolean then
+  set phase to "Stopped"
+  my showMessage("Inkling 2 Mini needs its own TensorFold build", "TensorFold's release cannot load Inkling yet. Build pull request #4337 merged with #4124 in ~/GitHub/TensorFold-inkling with Zig 0.17.0 (zig build native -Dcpu=apple_m1 -Doptimize=ReleaseFast), then start again.")
+  my refresh:(missing value)
+  return
+ end if
  try
   set phase to "Downloading model"
   my launchDownload()
@@ -297,9 +333,7 @@ on refresh:sender
    if phase is "Downloading model" and resultCode is 0 then
     -- TensorFold confirms the files it finds cached before serving them.
     try
-     set pullTarget to modelID
-     if modelIndex is 1 then set pullTarget to modelID & "@93760be4f1f69842a46bc13dbdc0f19e291392a3"
-     my launchWorker({"pull", pullTarget})
+     my launchWorker({"pull", my pinnedTarget()})
      set phase to "Checking model"
     on error
      set worker to missing value
@@ -309,7 +343,7 @@ on refresh:sender
     set phase to "Download paused — Start resumes it"
    else if phase is "Checking model" and resultCode is 0 then
     try
-     my launchWorker({"serve", modelID, "--name", "local-model", "--host", "127.0.0.1", "--port", "8080", "--context", contextTokens as text, "--parallel", "1", "--no-thinking", "--no-update-check"})
+     my launchWorker(my serveArguments())
      set phase to "Running"
     on error
      set worker to missing value
