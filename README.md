@@ -4,6 +4,16 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 
 ![TensorFold Bar menu with server controls and available RAM](screenshot.png)
 
+## Install
+
+On an Apple Silicon Mac, install the [latest release](https://github.com/larssteenhoff/TensorFoldBar/releases/latest) from Terminal:
+
+```bash
+curl -fL -o /tmp/TensorFoldBar.zip https://github.com/larssteenhoff/TensorFoldBar/releases/latest/download/TensorFoldBar-mac-arm64.zip && mkdir -p ~/Applications && ditto -x -k /tmp/TensorFoldBar.zip ~/Applications && open ~/Applications/"TensorFold Bar.app"
+```
+
+Run it again to update. The app is ad hoc signed, not notarized by Apple: files downloaded with curl are not quarantined, so it opens directly, while a copy downloaded in a browser is blocked until you allow it under System Settings › Privacy & Security. To build it yourself instead, see [Build](#build).
+
 ## Use with Harness
 
 [Harness](https://github.com/larssteenhoff/deepseek-harness) — a DeepSeek Harness fork with a desktop app — uses this app's server as its default model and has a TensorFold button that opens this app. To install both on an Apple Silicon Mac with Node.js 24.9 or newer:
