@@ -7,6 +7,7 @@ osacompile -s -o "$app" TensorFoldBar.applescript
 resources="$app/Contents/Resources"
 cp update.sh "$resources/update.sh"
 cp download.sh "$resources/download.sh"
+cp harness-sync.sh "$resources/harness-sync.sh"
 cp benchmark.rb "$resources/benchmark.rb"
 plist="$app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c 'Add :LSUIElement bool true' "$plist" 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :LSUIElement true' "$plist"

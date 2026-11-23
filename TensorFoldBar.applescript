@@ -91,6 +91,7 @@ on run
  set savedContext to (current application's NSUserDefaults's standardUserDefaults())'s integerForKey:"contextTokens"
  if (savedContext as integer) is in contextChoices then set contextTokens to savedContext as integer
  my fitContextToModel()
+ my syncHarness()
  set contextItem to my addItem(mainMenu, "Context: " & my contextLabel(contextTokens), "statusInfo:")
  set contextMenu to (current application's NSMenu's alloc())'s initWithTitle:"Context"
  set contextOptions to {}
@@ -458,6 +459,7 @@ on selectModel:sender
  set modelIndex to selectedIndex
  set modelID to item modelIndex of modelRepos
  my fitContextToModel()
+ my syncHarness()
  (current application's NSUserDefaults's standardUserDefaults())'s setObject:modelID forKey:"selectedModelRepo"
  my hideBenchmarkResults()
  set benchmarkButtonTitle to "Run benchmark"
@@ -525,7 +527,7 @@ on fitContextToModel()
   if (choice as integer) ≤ limit then set contextTokens to choice as integer
  end repeat
  (current application's NSUserDefaults's standardUserDefaults())'s setInteger:contextTokens forKey:"contextTokens"
- my syncHarnessContext()
+ my syncHarness()
 end fitContextToModel
 
 on setContextTokens:sender
@@ -533,7 +535,7 @@ on setContextTokens:sender
  if chosen is contextTokens then return
  set contextTokens to chosen
  (current application's NSUserDefaults's standardUserDefaults())'s setInteger:contextTokens forKey:"contextTokens"
- my syncHarnessContext()
+ my syncHarness()
  -- A running server keeps the window it started with; restart it so the new one applies.
  if phase is "Running" then
   set restartPending to true
@@ -542,12 +544,18 @@ on setContextTokens:sender
  my refresh:(missing value)
 end setContextTokens:
 
--- Keep DeepSeek Harness's TensorFold model entry at the served window so its compaction plans fit.
-on syncHarnessContext()
- set patchPath to ((current application's NSHomeDirectory()) as text) & "/.dsh/profiles/desktop/cordis.patch.yml"
- if not ((current application's NSFileManager's defaultManager())'s fileExistsAtPath:patchPath) as boolean then return
- my shellOutput("f=" & quoted form of patchPath & "; /usr/bin/awk -v n=" & contextTokens & " '/^ *tensorfold:[[:space:]]*$/ { inside = 1 } inside && /^ *contextWindow:/ { sub(/contextWindow:.*/, \"contextWindow: \" n); inside = 0 } { print }' \"$f\" > \"$f.tmp\" && /bin/mv \"$f.tmp\" \"$f\"")
-end syncHarnessContext
+-- Point DeepSeek Harness at the served model: its desktop profile (the app) and its headless profile
+-- (dsh run by other programs, such as Lucia Engine's AI Assistant) get the model's name, the served
+-- window (so compaction plans fit) and whether it reads images (harness-sync.sh).
+on syncHarness()
+ set syncScript to (((current application's NSBundle's mainBundle())'s resourcePath()) as text) & "/harness-sync.sh"
+ set inputs to "text"
+ if my isInkling() then set inputs to "text,image"
+ repeat with profileName in {"desktop", "headless"}
+  set patchPath to ((current application's NSHomeDirectory()) as text) & "/.dsh/profiles/" & profileName & "/cordis.patch.yml"
+  my shellOutput("/bin/bash " & quoted form of syncScript & " " & quoted form of patchPath & " " & quoted form of (item modelIndex of modelNames) & " " & contextTokens & " " & inputs & " >> " & quoted form of logPath & " 2>&1")
+ end repeat
+end syncHarness
 
 on setBenchmarkTokens:sender
  if benchmarkTask is not missing value then return
