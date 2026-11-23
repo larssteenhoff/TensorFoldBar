@@ -16,23 +16,21 @@ Run it again to update. The app is ad hoc signed, not notarized by Apple: files 
 
 ## Use with Harness
 
-[Harness](https://github.com/larssteenhoff/deepseek-harness) — a DeepSeek Harness fork with a desktop app — uses this app's server as its default model and has a TensorFold button that opens this app. To install both on an Apple Silicon Mac with Node.js 24.9 or newer:
+[Harness](https://github.com/larssteenhoff/deepseek-harness), a DeepSeek Harness fork with a desktop app, uses this app's server as its default model and has a TensorFold button in its sidebar that opens this app. To install both prebuilt apps on an Apple Silicon Mac, with nothing else installed first:
 
 ```bash
-git clone https://github.com/larssteenhoff/deepseek-harness.git ~/deepseek-harness
-cd ~/deepseek-harness
-./install-mac.sh
+curl -fsSL https://github.com/larssteenhoff/deepseek-harness/releases/latest/download/install-mac.sh | bash
 ```
 
-The script clones this repository into `~/TensorFoldBar`, builds both apps, installs them in `~/Applications`, and points Harness at `http://127.0.0.1:8080/v1`. Choosing a window in the Context menu also updates Harness's model entry.
+Whenever the server starts, the model changes or the context changes, TensorFold Bar updates the TensorFold model entry in Harness's desktop and headless profiles (`~/.dsh/profiles/{desktop,headless}/cordis.patch.yml`) with `harness-sync.sh`: the model's name, the served context window and whether it reads images. A profile without the TensorFold provider gets it, pointing at `http://127.0.0.1:8080/v1` with model `local-model`; the first change keeps a `.bak` copy. Restart Harness to pick up a change.
 
 ## Controls
 
 Opening TensorFold Bar automatically starts the saved model: it checks/downloads the checkpoint, then starts the local server. Pause, Stop, and manual Start remain available in the menu. Opening the app with a newly selected model can start a large download if its weights are not cached.
 
 - Model: choose a checkpoint from the submenu. Stop the server before switching; the selected repository is remembered.
-- Context: choose the server's context window, 4K to 1M tokens. A coding agent such as DeepSeek Harness needs more than 16K: its system prompt and tools alone take about 11K. Only windows the selected model declares (its `max_position_embeddings`) are listed: 256K for the Qwen models, 1M for GLM-5.3 Flash. Choosing a new window restarts a running server; switching to a model with a shorter limit lowers the setting to fit. The choice is remembered and also written to DeepSeek Harness's TensorFold model entry (`contextWindow` in `~/.dsh/profiles/desktop/cordis.patch.yml`), so restart Harness to pick it up. Longer windows take more memory for the KV cache and slow long prompts.
-- Start: download the selected checkpoint, have TensorFold check it, then launch its local server. The starter Qwen3.5-2B checkpoint is revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
+- Context: choose the server's context window, 4K to 1M tokens. A coding agent such as DeepSeek Harness needs more than 16K: its system prompt and tools alone take about 11K. Only windows the selected model declares (its `max_position_embeddings`) are listed: 256K for the Qwen models, 1M for GLM-5.3 Flash and Inkling 2 Mini. Choosing a new window restarts a running server; switching to a model with a shorter limit lowers the setting to fit. The choice is remembered and passed to Harness (see [Use with Harness](#use-with-harness)). Longer windows take more memory for the KV cache and slow long prompts.
+- Start: download the selected checkpoint, have TensorFold check it, then launch its local server. Qwen3.5 2B and Inkling 2 Mini are revision-pinned; other models use their repository's current default revision. Large models can require over 100 GB of downloads and substantial loading time.
 - Pause / Resume: suspend or resume the server process. Pausing retains model memory and pauses requests.
 - Stop: terminate the server and release its memory, or stop a download in progress.
 - Download progress: while a checkpoint downloads, the menu bar shows its percentage and the status row shows downloaded and total GiB.
@@ -60,6 +58,7 @@ TensorFold's own `pull` keeps only finished files when it is stopped, so the app
 | Qwen3.8 Flash Next, 4-bit | `TensorFold/Qwen3.8-Flash-Next-MLX-4bit-MTP` | Native Metal, includes MTP |
 | Qwen3.8 Flash Next, 6-bit | `TensorFold/Qwen3.8-Flash-Next-MLX-6bit-MTP` | Native Metal, M5 Ultra checked upstream |
 | GLM-5.3 Flash, 4-bit | `TensorFold/GLM-5.3-Flash-MLX-4bit-MTP` | Experimental on a single Mac; upstream qualifies two M5 Ultras |
+| Inkling 2 Mini, vision | `thinkingmachines/Inkling-2-Mini` | Experimental, pinned revision; reads images; needs its own TensorFold build (below) |
 | DeepSeek Flash | Informational menu entry | Native release does not yet serve DeepSeek; the old Python 0.6.6 recipe uses a different engine |
 
 Every model serves at the same API URL under its own id (for example `qwen3.8-flash-next`), with `local-model` as an alias, with the context chosen in the Context menu (default 64K), one stream, and thinking off. Inkling 2 Mini (experimental) also reads images (`--vision`) and keeps its reasoning on; it runs on a TensorFold built from pull requests #4337 and #4124 in `~/GitHub/TensorFold-inkling`, because the bundled runtime cannot load it. The benchmark uses this alias as well. Model choices do not automatically download optional external drafters. Default TensorFold memory admission limits are preserved; choosing a larger model does not override them. GLM's single-Mac path may refuse to load and has not been validated by this app.
@@ -78,13 +77,13 @@ open "dist/TensorFold Bar.app"
 Building downloads the latest TensorFold runtime from its upstream GitHub release. To bundle an already extracted runtime instead:
 
 ```bash
-TENSORFOLD_RUNTIME="/absolute/path/to/tensorfold-1.3.2-macos-arm64" bash build.sh
+TENSORFOLD_RUNTIME="/absolute/path/to/tensorfold-1.3.4-macos-arm64" bash build.sh
 ```
 
 Move the resulting app to a writable location. Updates modify its bundled runtime; managed or read-only installations may prevent updates. The build uses local ad hoc signing, not Apple notarization.
 
 ## Status
 
-Initial prototype. AppleScript source compiles, but launch and server controls still need validation on the target Mac. “Running” currently means the server process started; the model may still be loading. Updates require stopping the server first. Closing the app terminates the server it owns and stops its download, which resumes on the next Start.
+Used daily on an M5 Ultra Mac Studio with 256 GB of memory (macOS 27.2), serving Qwen3.8 Flash Next 6-bit to Harness: downloads with resume, the server, the Context menu and the benchmark have been exercised there. Other Macs, GLM-5.3 Flash on one Mac, and Inkling 2 Mini's separate runtime are less tested. “Running” means the server process started; the model may still be loading. Updates require stopping the server first. Quitting the app stops the server it owns and its download, which resumes on the next Start.
 
-TensorFold and downloaded models retain their upstream licenses. Model weights and third-party runtime binaries are not included in this source repository.
+TensorFold and downloaded models keep their upstream licenses. This source repository holds no model weights or runtime binaries; the [release](https://github.com/larssteenhoff/TensorFoldBar/releases/latest) app bundles the TensorFold runtime (Apache-2.0) with its license and notices.
