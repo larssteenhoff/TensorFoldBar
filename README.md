@@ -4,6 +4,18 @@ A macOS menu bar controller for [TensorFold](https://github.com/ashhart/TensorFo
 
 ![TensorFold Bar menu with server controls and available RAM](screenshot.png)
 
+## Use with Harness
+
+[Harness](https://github.com/larssteenhoff/deepseek-harness) — a DeepSeek Harness fork with a desktop app — uses this app's server as its default model and has a TensorFold button that opens this app. To install both on an Apple Silicon Mac with Node.js 24.9 or newer:
+
+```bash
+git clone https://github.com/larssteenhoff/deepseek-harness.git ~/deepseek-harness
+cd ~/deepseek-harness
+./install-mac.sh
+```
+
+The script clones this repository into `~/TensorFoldBar`, builds both apps, installs them in `~/Applications`, and points Harness at `http://127.0.0.1:8080/v1`. Choosing a window in the Context menu also updates Harness's model entry.
+
 ## Controls
 
 Opening TensorFold Bar automatically starts the saved model: it checks/downloads the checkpoint, then starts the local server. Pause, Stop, and manual Start remain available in the menu. Opening the app with a newly selected model can start a large download if its weights are not cached.
